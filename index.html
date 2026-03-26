@@ -1,0 +1,780 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>图片局部雾化马赛克工具</title>
+  <style>
+    :root {
+      --bg: #0b1020;
+      --panel: rgba(255, 255, 255, 0.08);
+      --line: rgba(255, 255, 255, 0.18);
+      --text: #f5f7ff;
+      --muted: #b8c0ff;
+      --accent: #5eead4;
+      --accent-2: #7c3aed;
+      --danger: #fb7185;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--text);
+      font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      background:
+        radial-gradient(1200px 600px at 10% -10%, #1d4ed8 0%, transparent 55%),
+        radial-gradient(900px 500px at 100% 0%, #6d28d9 0%, transparent 52%),
+        var(--bg);
+      padding: 28px;
+    }
+
+    .app {
+      max-width: 1240px;
+      margin: 0 auto;
+      display: grid;
+      gap: 18px;
+    }
+
+    .header {
+      background: linear-gradient(135deg, rgba(255,255,255,0.12), rgba(255,255,255,0.03));
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 18px 20px;
+      backdrop-filter: blur(10px);
+    }
+
+    .title {
+      margin: 0;
+      font-size: 24px;
+      letter-spacing: 0.4px;
+    }
+
+    .desc {
+      margin: 10px 0 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 14px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 14px;
+      backdrop-filter: blur(12px);
+    }
+
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .btn, .file-label {
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      background: rgba(255,255,255,0.06);
+      color: var(--text);
+      border-radius: 12px;
+      padding: 10px 14px;
+      cursor: pointer;
+      transition: transform .15s ease, background .2s ease;
+      font-size: 14px;
+    }
+
+    .btn:hover, .file-label:hover { transform: translateY(-1px); background: rgba(255,255,255,0.12); }
+    .btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+
+    .btn.primary {
+      border-color: transparent;
+      background: linear-gradient(135deg, var(--accent), #06b6d4);
+      color: #062128;
+      font-weight: 600;
+    }
+
+    .btn.warn {
+      border-color: transparent;
+      background: linear-gradient(135deg, #fb7185, var(--danger));
+      color: white;
+      font-weight: 600;
+    }
+
+    input[type="file"] { display: none; }
+
+    .range-wrap {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(255,255,255,0.05);
+      padding: 8px 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.15);
+    }
+
+    input[type="range"] { width: 180px; }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: 9fr 16fr;
+      gap: 16px;
+    }
+
+    @media (max-width: 980px) {
+      .workspace {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 12px;
+      backdrop-filter: blur(12px);
+    }
+
+    .panel h3 {
+      margin: 0 0 10px;
+      font-size: 15px;
+      color: #dbe4ff;
+      font-weight: 600;
+    }
+
+    .canvas-wrap {
+      border: 1px dashed rgba(255,255,255,0.25);
+      border-radius: 14px;
+      min-height: 360px;
+      display: grid;
+      place-items: center;
+      overflow: auto;
+      background: rgba(0,0,0,0.18);
+      padding: 10px;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .canvas-wrap.drop-active {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(94, 234, 212, 0.35);
+    }
+
+    canvas {
+      max-width: 100%;
+      border-radius: 10px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+      background: #111827;
+      cursor: crosshair;
+    }
+
+    .hint {
+      color: var(--muted);
+      font-size: 13px;
+      margin-top: 8px;
+      line-height: 1.5;
+    }
+
+    .status {
+      font-size: 13px;
+      color: #a5b4fc;
+      min-height: 20px;
+    }
+
+    .split-preview {
+      margin-top: 10px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 10px;
+    }
+
+    .split-card {
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 10px;
+      padding: 8px;
+      background: rgba(255,255,255,0.04);
+    }
+
+    .split-card .checker {
+      border-radius: 8px;
+      overflow: hidden;
+      background-image:
+        linear-gradient(45deg, rgba(255,255,255,0.12) 25%, transparent 25%),
+        linear-gradient(-45deg, rgba(255,255,255,0.12) 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, rgba(255,255,255,0.12) 75%),
+        linear-gradient(-45deg, transparent 75%, rgba(255,255,255,0.12) 75%);
+      background-size: 14px 14px;
+      background-position: 0 0, 0 7px, 7px -7px, -7px 0;
+    }
+
+    .split-card p {
+      margin: 0 0 8px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .split-card canvas {
+      width: 100%;
+      height: auto;
+      display: block;
+      border-radius: 8px;
+      cursor: default;
+      background: transparent;
+      box-shadow: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <section class="header">
+      <h1 class="title">图片局部雾化马赛克</h1>
+      <p class="desc">上传图片后，在左侧拖拽鼠标框选区域，点击“应用马赛克”即可在右侧看到处理结果，最后可一键下载。</p>
+    </section>
+
+    <section class="controls">
+      <div class="row">
+        <label class="file-label" for="upload">上传图片</label>
+        <input id="upload" type="file" accept="image/*" />
+
+        <button id="applyBtn" class="btn primary" disabled>应用马赛克</button>
+        <button id="blurBtn" class="btn primary" disabled>应用雾化</button>
+        <button id="separateBtn" class="btn primary" disabled>人脸分离</button>
+        <button id="resetBtn" class="btn" disabled>重置当前选区</button>
+        <button id="downloadBtn" class="btn warn" disabled>下载处理图</button>
+      </div>
+
+      <div class="row">
+        <div class="range-wrap">
+          <label for="pixelSize">图片处理强度</label>
+          <input id="pixelSize" type="range" min="4" max="40" step="1" value="14" />
+          <span id="pixelLabel">14</span>
+        </div>
+      </div>
+      <div id="status" class="status">请先上传一张图片</div>
+    </section>
+
+    <section class="workspace">
+      <article class="panel">
+        <h3>原图（可框选）</h3>
+        <div id="sourceDropZone" class="canvas-wrap">
+          <canvas id="sourceCanvas"></canvas>
+        </div>
+        <p class="hint">操作：支持拖拽图片到原图区域，或点击“上传图片”；按住鼠标左键可选择区域。</p>
+      </article>
+
+      <article class="panel">
+        <h3>处理区（结果预览）</h3>
+        <div class="canvas-wrap">
+          <canvas id="resultCanvas"></canvas>
+        </div>
+        <div id="splitPreview" class="split-preview" style="display:none;">
+          <div class="split-card">
+            <p>分离出的选区（透明背景）</p>
+            <div class="checker">
+              <canvas id="faceCanvas"></canvas>
+            </div>
+          </div>
+          <div class="split-card">
+            <p>分离后的原图（去除选区）</p>
+            <div class="checker">
+              <canvas id="bgCanvas"></canvas>
+            </div>
+          </div>
+        </div>
+        <p class="hint">可重复框选 + 应用马赛克/雾化；人脸分离后会在下方显示两张结果。</p>
+      </article>
+    </section>
+  </div>
+
+  <script>
+    const uploadInput = document.getElementById('upload');
+    const applyBtn = document.getElementById('applyBtn');
+    const blurBtn = document.getElementById('blurBtn');
+    const separateBtn = document.getElementById('separateBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const pixelSizeInput = document.getElementById('pixelSize');
+    const pixelLabel = document.getElementById('pixelLabel');
+    const statusEl = document.getElementById('status');
+
+    const sourceCanvas = document.getElementById('sourceCanvas');
+    const resultCanvas = document.getElementById('resultCanvas');
+    const faceCanvas = document.getElementById('faceCanvas');
+    const bgCanvas = document.getElementById('bgCanvas');
+    const splitPreview = document.getElementById('splitPreview');
+    const sourceDropZone = document.getElementById('sourceDropZone');
+    const sourceCtx = sourceCanvas.getContext('2d');
+    const resultCtx = resultCanvas.getContext('2d');
+    const faceCtx = faceCanvas.getContext('2d');
+    const bgCtx = bgCanvas.getContext('2d');
+
+    const baseCanvas = document.createElement('canvas');
+    const baseCtx = baseCanvas.getContext('2d');
+
+    const MODE_RECT = 'rect';
+    const MODE_POLYGON = 'polygon';
+
+    let selection = null;
+    let isDragging = false;
+    let startX = 0;
+    let startY = 0;
+    let imageLoaded = false;
+    let hasProcessingResult = false;
+    let isSplitMode = false;
+    let drawMode = MODE_POLYGON;
+    let drawingPath = [];
+
+    const modeWrap = document.createElement('div');
+    modeWrap.className = 'range-wrap';
+    modeWrap.innerHTML = `
+      <label for="drawMode">选区方式</label>
+      <select id="drawMode" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.25);color:#fff;border-radius:8px;padding:6px 8px;">
+        <option value="rect">矩形框选</option>
+        <option value="polygon" selected>鼠标拉线闭合区域</option>
+      </select>
+    `;
+    pixelSizeInput.closest('.row').appendChild(modeWrap);
+    const drawModeSelect = document.getElementById('drawMode');
+
+    drawModeSelect.addEventListener('change', () => {
+      drawMode = drawModeSelect.value;
+      selection = null;
+      drawingPath = [];
+      applyBtn.disabled = true;
+      blurBtn.disabled = true;
+      separateBtn.disabled = true;
+      splitPreview.style.display = 'none';
+      drawSourceWithSelection();
+      statusEl.textContent = drawMode === MODE_RECT
+        ? '已切换为矩形框选模式'
+        : '已切换为拉线闭合模式：按住左键拖动，松开后自动闭合区域';
+    });
+
+    pixelSizeInput.addEventListener('input', () => {
+      pixelLabel.textContent = pixelSizeInput.value;
+    });
+
+    uploadInput.addEventListener('change', (event) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      loadImageFile(file);
+    });
+
+    function loadImageFile(file) {
+      if (!file.type.startsWith('image/')) {
+        statusEl.textContent = '仅支持图片文件，请重新选择';
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          setupCanvas(img.width, img.height);
+          sourceCtx.clearRect(0, 0, sourceCanvas.width, sourceCanvas.height);
+          resultCtx.clearRect(0, 0, resultCanvas.width, resultCanvas.height);
+          baseCtx.clearRect(0, 0, baseCanvas.width, baseCanvas.height);
+
+          sourceCtx.drawImage(img, 0, 0);
+          baseCtx.drawImage(img, 0, 0);
+
+          resultCtx.clearRect(0, 0, resultCanvas.width, resultCanvas.height);
+          faceCtx.clearRect(0, 0, faceCanvas.width, faceCanvas.height);
+          bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+          resultCanvas.style.display = 'block';
+
+          imageLoaded = true;
+          hasProcessingResult = false;
+          isSplitMode = false;
+          selection = null;
+          drawingPath = [];
+          applyBtn.disabled = true;
+          blurBtn.disabled = true;
+          separateBtn.disabled = true;
+          resetBtn.disabled = false;
+          downloadBtn.disabled = true;
+          splitPreview.style.display = 'none';
+          statusEl.textContent = '图片已加载，处理区为空，请先在左侧选择区域并处理';
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    sourceDropZone.addEventListener('dragover', (event) => {
+      event.preventDefault();
+      sourceDropZone.classList.add('drop-active');
+      statusEl.textContent = '松开鼠标即可导入图片';
+    });
+
+    sourceDropZone.addEventListener('dragleave', () => {
+      sourceDropZone.classList.remove('drop-active');
+      if (!imageLoaded) {
+        statusEl.textContent = '请先上传一张图片';
+      }
+    });
+
+    sourceDropZone.addEventListener('drop', (event) => {
+      event.preventDefault();
+      sourceDropZone.classList.remove('drop-active');
+      const file = event.dataTransfer?.files?.[0];
+      if (!file) return;
+      loadImageFile(file);
+    });
+
+    function setupCanvas(width, height) {
+      sourceCanvas.width = width;
+      sourceCanvas.height = height;
+      resultCanvas.width = width;
+      resultCanvas.height = height;
+      baseCanvas.width = width;
+      baseCanvas.height = height;
+      faceCanvas.width = width;
+      faceCanvas.height = height;
+      bgCanvas.width = width;
+      bgCanvas.height = height;
+    }
+
+    function getCanvasPoint(event, canvas) {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      return {
+        x: (event.clientX - rect.left) * scaleX,
+        y: (event.clientY - rect.top) * scaleY,
+      };
+    }
+
+    sourceCanvas.addEventListener('mousedown', (event) => {
+      if (!imageLoaded) return;
+      isDragging = true;
+      const p = getCanvasPoint(event, sourceCanvas);
+
+      if (drawMode === MODE_RECT) {
+        startX = p.x;
+        startY = p.y;
+        selection = { type: MODE_RECT, x: startX, y: startY, w: 0, h: 0 };
+      } else {
+        drawingPath = [p];
+        selection = null;
+      }
+
+      drawSourceWithSelection();
+    });
+
+    sourceCanvas.addEventListener('mousemove', (event) => {
+      if (!isDragging || !imageLoaded) return;
+      const p = getCanvasPoint(event, sourceCanvas);
+
+      if (drawMode === MODE_RECT) {
+        selection = { type: MODE_RECT, ...normalizeRect(startX, startY, p.x, p.y) };
+      } else {
+        drawingPath.push(p);
+      }
+
+      drawSourceWithSelection();
+    });
+
+    window.addEventListener('mouseup', () => {
+      if (!isDragging) return;
+      isDragging = false;
+
+      if (drawMode === MODE_RECT) {
+        if (selection && (selection.w < 2 || selection.h < 2)) {
+          selection = null;
+        }
+      } else {
+        if (drawingPath.length >= 3) {
+          selection = { type: MODE_POLYGON, points: [...drawingPath] };
+        } else {
+          selection = null;
+        }
+      }
+
+      applyBtn.disabled = !selection;
+      blurBtn.disabled = !selection;
+      separateBtn.disabled = !selection;
+      drawSourceWithSelection();
+      if (selection) {
+        statusEl.textContent = '选区已确定，点击“应用马赛克”';
+      }
+    });
+
+    function normalizeRect(x1, y1, x2, y2) {
+      return {
+        x: Math.min(x1, x2),
+        y: Math.min(y1, y2),
+        w: Math.abs(x2 - x1),
+        h: Math.abs(y2 - y1),
+      };
+    }
+
+    function drawSourceWithSelection() {
+      sourceCtx.clearRect(0, 0, sourceCanvas.width, sourceCanvas.height);
+      sourceCtx.drawImage(baseCanvas, 0, 0);
+
+      sourceCtx.save();
+      sourceCtx.strokeStyle = '#5eead4';
+      sourceCtx.lineWidth = 2;
+      sourceCtx.setLineDash([8, 5]);
+      sourceCtx.fillStyle = 'rgba(94, 234, 212, 0.16)';
+
+      if (selection?.type === MODE_RECT) {
+        sourceCtx.strokeRect(selection.x, selection.y, selection.w, selection.h);
+        sourceCtx.fillRect(selection.x, selection.y, selection.w, selection.h);
+      }
+
+      if (selection?.type === MODE_POLYGON && selection.points.length > 1) {
+        drawPolygon(sourceCtx, selection.points, true);
+      }
+
+      if (isDragging && drawMode === MODE_POLYGON && drawingPath.length > 1) {
+        drawPolygon(sourceCtx, drawingPath, false);
+      }
+
+      sourceCtx.restore();
+    }
+
+    function drawPolygon(ctx, points, closed) {
+      ctx.beginPath();
+      ctx.moveTo(points[0].x, points[0].y);
+      for (let i = 1; i < points.length; i++) {
+        ctx.lineTo(points[i].x, points[i].y);
+      }
+      if (closed) ctx.closePath();
+      ctx.stroke();
+      if (closed) ctx.fill();
+    }
+
+    function ensureResultCanvasInitialized() {
+      if (isSplitMode) {
+        statusEl.textContent = '当前为人脸分离结果，请先重新上传图片再进行马赛克/雾化';
+        return false;
+      }
+
+      if (!hasProcessingResult) {
+        resultCtx.clearRect(0, 0, resultCanvas.width, resultCanvas.height);
+        resultCtx.drawImage(baseCanvas, 0, 0);
+      }
+      resultCanvas.style.display = 'block';
+      splitPreview.style.display = 'none';
+      return true;
+    }
+
+    applyBtn.addEventListener('click', () => {
+      if (!selection) return;
+      if (!ensureResultCanvasInitialized()) return;
+
+      const size = Number(pixelSizeInput.value);
+      applyMosaic(resultCtx, selection, size);
+      hasProcessingResult = true;
+      downloadBtn.disabled = false;
+      drawSourceWithSelection();
+      statusEl.textContent = '马赛克已应用，可以继续选区处理或直接下载';
+    });
+
+    blurBtn.addEventListener('click', () => {
+      if (!selection) return;
+      if (!ensureResultCanvasInitialized()) return;
+
+      const strength = Number(pixelSizeInput.value);
+      applyBlur(resultCtx, selection, strength);
+      hasProcessingResult = true;
+      downloadBtn.disabled = false;
+      drawSourceWithSelection();
+      statusEl.textContent = '雾化已应用，可以继续选区处理或直接下载';
+    });
+
+    separateBtn.addEventListener('click', () => {
+      if (!selection) return;
+
+      faceCtx.clearRect(0, 0, faceCanvas.width, faceCanvas.height);
+      bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+      faceCtx.drawImage(baseCanvas, 0, 0);
+      bgCtx.drawImage(baseCanvas, 0, 0);
+
+      splitSelectionToTwoImages(faceCtx, bgCtx, selection);
+      hasProcessingResult = true;
+      isSplitMode = true;
+      downloadBtn.disabled = true;
+      resultCanvas.style.display = 'none';
+      splitPreview.style.display = 'grid';
+      statusEl.textContent = '人脸分离完成，处理区已直接显示分离出的选区和分离后的原图';
+    });
+
+    function applyMosaic(ctx, area, blockSize) {
+      if (area.type === MODE_RECT) {
+        mosaicRect(ctx, area, blockSize);
+        return;
+      }
+
+      const bounds = polygonBounds(area.points);
+      const xEnd = Math.min(ctx.canvas.width, bounds.x + bounds.w);
+      const yEnd = Math.min(ctx.canvas.height, bounds.y + bounds.h);
+
+      for (let y = bounds.y; y < yEnd; y += blockSize) {
+        for (let x = bounds.x; x < xEnd; x += blockSize) {
+          const centerX = x + blockSize / 2;
+          const centerY = y + blockSize / 2;
+          if (!pointInPolygon(centerX, centerY, area.points)) continue;
+
+          const sampleW = Math.min(blockSize, xEnd - x);
+          const sampleH = Math.min(blockSize, yEnd - y);
+          const pixel = ctx.getImageData(x, y, 1, 1).data;
+          ctx.fillStyle = `rgba(${pixel[0]}, ${pixel[1]}, ${pixel[2]}, ${pixel[3] / 255})`;
+          ctx.fillRect(x, y, sampleW, sampleH);
+        }
+      }
+    }
+
+    function mosaicRect(ctx, rect, blockSize) {
+      const xEnd = Math.min(ctx.canvas.width, rect.x + rect.w);
+      const yEnd = Math.min(ctx.canvas.height, rect.y + rect.h);
+
+      for (let y = rect.y; y < yEnd; y += blockSize) {
+        for (let x = rect.x; x < xEnd; x += blockSize) {
+          const sampleW = Math.min(blockSize, xEnd - x);
+          const sampleH = Math.min(blockSize, yEnd - y);
+          const pixel = ctx.getImageData(x, y, 1, 1).data;
+          ctx.fillStyle = `rgba(${pixel[0]}, ${pixel[1]}, ${pixel[2]}, ${pixel[3] / 255})`;
+          ctx.fillRect(x, y, sampleW, sampleH);
+        }
+      }
+    }
+
+    function polygonBounds(points) {
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      points.forEach(p => {
+        minX = Math.min(minX, p.x);
+        minY = Math.min(minY, p.y);
+        maxX = Math.max(maxX, p.x);
+        maxY = Math.max(maxY, p.y);
+      });
+      return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+    }
+
+    function pointInPolygon(x, y, points) {
+      let inside = false;
+      for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+        const xi = points[i].x, yi = points[i].y;
+        const xj = points[j].x, yj = points[j].y;
+        const intersect = ((yi > y) !== (yj > y))
+          && (x < (xj - xi) * (y - yi) / ((yj - yi) || 1e-9) + xi);
+        if (intersect) inside = !inside;
+      }
+      return inside;
+    }
+
+    function applyBlur(ctx, area, strength) {
+      const blurRadius = Math.max(1, strength / 3);
+      const blurredCanvas = createBlurredSnapshot(ctx.canvas, blurRadius);
+
+      ctx.save();
+      if (area.type === MODE_RECT) {
+        const x = Math.max(0, Math.floor(area.x));
+        const y = Math.max(0, Math.floor(area.y));
+        const w = Math.min(ctx.canvas.width - x, Math.ceil(area.w));
+        const h = Math.min(ctx.canvas.height - y, Math.ceil(area.h));
+        if (w <= 0 || h <= 0) {
+          ctx.restore();
+          return;
+        }
+        ctx.beginPath();
+        ctx.rect(x, y, w, h);
+      } else {
+        if (!area.points || area.points.length < 3) {
+          ctx.restore();
+          return;
+        }
+        ctx.beginPath();
+        ctx.moveTo(area.points[0].x, area.points[0].y);
+        for (let i = 1; i < area.points.length; i++) {
+          ctx.lineTo(area.points[i].x, area.points[i].y);
+        }
+        ctx.closePath();
+      }
+
+      ctx.clip();
+      ctx.drawImage(blurredCanvas, 0, 0);
+      ctx.restore();
+    }
+
+    function createBlurredSnapshot(sourceCanvasEl, blurRadius) {
+      const temp = document.createElement('canvas');
+      temp.width = sourceCanvasEl.width;
+      temp.height = sourceCanvasEl.height;
+      const tctx = temp.getContext('2d');
+      tctx.filter = `blur(${blurRadius}px)`;
+      tctx.drawImage(sourceCanvasEl, 0, 0);
+      tctx.filter = 'none';
+      return temp;
+    }
+
+    function splitSelectionToTwoImages(faceCtx, bgCtx, area) {
+      const faceData = faceCtx.getImageData(0, 0, faceCtx.canvas.width, faceCtx.canvas.height);
+      const bgData = bgCtx.getImageData(0, 0, bgCtx.canvas.width, bgCtx.canvas.height);
+
+      for (let y = 0; y < faceCtx.canvas.height; y++) {
+        for (let x = 0; x < faceCtx.canvas.width; x++) {
+          const idx = (y * faceCtx.canvas.width + x) * 4;
+          const selected = isPointSelected(area, x, y);
+          if (selected) {
+            bgData.data[idx + 3] = 0;
+          } else {
+            faceData.data[idx + 3] = 0;
+          }
+        }
+      }
+
+      faceCtx.putImageData(faceData, 0, 0);
+      bgCtx.putImageData(bgData, 0, 0);
+    }
+
+    function isPointSelected(area, x, y) {
+      if (area.type === MODE_RECT) {
+        return x >= area.x && x <= area.x + area.w && y >= area.y && y <= area.y + area.h;
+      }
+      return pointInPolygon(x, y, area.points);
+    }
+
+    function triggerDownload(canvas, filename) {
+      const link = document.createElement('a');
+      link.href = canvas.toDataURL('image/png');
+      link.download = filename;
+      link.click();
+    }
+
+    resetBtn.addEventListener('click', () => {
+      if (!imageLoaded) return;
+      selection = null;
+      drawingPath = [];
+      applyBtn.disabled = true;
+      blurBtn.disabled = true;
+      separateBtn.disabled = true;
+      splitPreview.style.display = 'none';
+      if (!hasProcessingResult || isSplitMode) {
+        resultCtx.clearRect(0, 0, resultCanvas.width, resultCanvas.height);
+        resultCanvas.style.display = 'block';
+      }
+      if (isSplitMode) {
+        hasProcessingResult = false;
+        isSplitMode = false;
+        downloadBtn.disabled = true;
+      }
+      drawSourceWithSelection();
+      statusEl.textContent = '选区已重置，请重新选择区域';
+    });
+
+    downloadBtn.addEventListener('click', () => {
+      if (!imageLoaded || !hasProcessingResult) return;
+      const link = document.createElement('a');
+      link.href = resultCanvas.toDataURL('image/png');
+      link.download = `processed_${Date.now()}.png`;
+      link.click();
+      statusEl.textContent = '下载已触发';
+    });
+  </script>
+</body>
+</html>
