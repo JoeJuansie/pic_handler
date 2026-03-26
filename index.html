@@ -215,6 +215,26 @@
       color: var(--muted);
     }
 
+    .split-actions {
+      margin-top: 8px;
+      display: flex;
+      justify-content: flex-end;
+    }
+
+    .mini-btn {
+      border: 1px solid rgba(255, 255, 255, 0.28);
+      background: rgba(255,255,255,0.08);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 6px 10px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+
+    .mini-btn:hover {
+      background: rgba(255,255,255,0.14);
+    }
+
     .split-card canvas {
       width: 100%;
       height: auto;
@@ -242,6 +262,7 @@
         <button id="blurBtn" class="btn primary" disabled>应用雾化</button>
         <button id="separateBtn" class="btn primary" disabled>人脸分离</button>
         <button id="resetBtn" class="btn" disabled>重置当前选区</button>
+        <button id="clearAllBtn" class="btn" disabled>清空图片区</button>
         <button id="downloadBtn" class="btn warn" disabled>下载处理图</button>
       </div>
 
@@ -275,11 +296,17 @@
             <div class="checker">
               <canvas id="faceCanvas"></canvas>
             </div>
+            <div class="split-actions">
+              <button id="downloadFaceBtn" class="mini-btn" type="button">下载这张</button>
+            </div>
           </div>
           <div class="split-card">
             <p>分离后的原图（去除选区）</p>
             <div class="checker">
               <canvas id="bgCanvas"></canvas>
+            </div>
+            <div class="split-actions">
+              <button id="downloadBgBtn" class="mini-btn" type="button">下载这张</button>
             </div>
           </div>
         </div>
@@ -294,6 +321,7 @@
     const blurBtn = document.getElementById('blurBtn');
     const separateBtn = document.getElementById('separateBtn');
     const resetBtn = document.getElementById('resetBtn');
+    const clearAllBtn = document.getElementById('clearAllBtn');
     const downloadBtn = document.getElementById('downloadBtn');
     const pixelSizeInput = document.getElementById('pixelSize');
     const pixelLabel = document.getElementById('pixelLabel');
@@ -304,6 +332,8 @@
     const faceCanvas = document.getElementById('faceCanvas');
     const bgCanvas = document.getElementById('bgCanvas');
     const splitPreview = document.getElementById('splitPreview');
+    const downloadFaceBtn = document.getElementById('downloadFaceBtn');
+    const downloadBgBtn = document.getElementById('downloadBgBtn');
     const sourceDropZone = document.getElementById('sourceDropZone');
     const sourceCtx = sourceCanvas.getContext('2d');
     const resultCtx = resultCanvas.getContext('2d');
@@ -394,6 +424,7 @@
           blurBtn.disabled = true;
           separateBtn.disabled = true;
           resetBtn.disabled = false;
+          clearAllBtn.disabled = false;
           downloadBtn.disabled = true;
           splitPreview.style.display = 'none';
           statusEl.textContent = '图片已加载，处理区为空，请先在左侧选择区域并处理';
@@ -598,7 +629,7 @@
       splitSelectionToTwoImages(faceCtx, bgCtx, selection);
       hasProcessingResult = true;
       isSplitMode = true;
-      downloadBtn.disabled = true;
+      downloadBtn.disabled = false;
       resultCanvas.style.display = 'none';
       splitPreview.style.display = 'grid';
       statusEl.textContent = '人脸分离完成，处理区已直接显示分离出的选区和分离后的原图';
@@ -767,13 +798,58 @@
       statusEl.textContent = '选区已重置，请重新选择区域';
     });
 
+    clearAllBtn.addEventListener('click', () => {
+      sourceCtx.clearRect(0, 0, sourceCanvas.width, sourceCanvas.height);
+      resultCtx.clearRect(0, 0, resultCanvas.width, resultCanvas.height);
+      faceCtx.clearRect(0, 0, faceCanvas.width, faceCanvas.height);
+      bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+      baseCtx.clearRect(0, 0, baseCanvas.width, baseCanvas.height);
+
+      selection = null;
+      drawingPath = [];
+      isDragging = false;
+      imageLoaded = false;
+      hasProcessingResult = false;
+      isSplitMode = false;
+
+      applyBtn.disabled = true;
+      blurBtn.disabled = true;
+      separateBtn.disabled = true;
+      resetBtn.disabled = true;
+      clearAllBtn.disabled = true;
+      downloadBtn.disabled = true;
+
+      splitPreview.style.display = 'none';
+      resultCanvas.style.display = 'block';
+      uploadInput.value = '';
+      statusEl.textContent = '图片已清空，请重新上传';
+    });
+
     downloadBtn.addEventListener('click', () => {
       if (!imageLoaded || !hasProcessingResult) return;
-      const link = document.createElement('a');
-      link.href = resultCanvas.toDataURL('image/png');
-      link.download = `processed_${Date.now()}.png`;
-      link.click();
+
+      if (isSplitMode) {
+        const ts = Date.now();
+        triggerDownload(faceCanvas, `face_${ts}.png`);
+        triggerDownload(bgCanvas, `background_${ts}.png`);
+        statusEl.textContent = '人脸分离结果已全部下载（2张）';
+        return;
+      }
+
+      triggerDownload(resultCanvas, `processed_${Date.now()}.png`);
       statusEl.textContent = '下载已触发';
+    });
+
+    downloadFaceBtn.addEventListener('click', () => {
+      if (!imageLoaded || !isSplitMode) return;
+      triggerDownload(faceCanvas, `face_${Date.now()}.png`);
+      statusEl.textContent = '已下载分离选区图';
+    });
+
+    downloadBgBtn.addEventListener('click', () => {
+      if (!imageLoaded || !isSplitMode) return;
+      triggerDownload(bgCanvas, `background_${Date.now()}.png`);
+      statusEl.textContent = '已下载分离后原图';
     });
   </script>
 </body>
